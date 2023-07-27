@@ -2,40 +2,70 @@ package main
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 )
+
+type SSLRecord struct {
+	Domain       string
+	Valid        bool
+	Expiry       time.Time
+	Certificates []*x509.Certificate
+	Notes        string
+}
 
 func main() {
 	separator := ","
 	domains := []string{"thegrandfathersteakhouse.uk"}
+	records := make([]SSLRecord, 0)
 
-	log.Printf("Domain%sValid%sExpiry%sSSL Issuer%sNotes", separator, separator, separator, separator)
 	for _, domain := range domains {
+		ssl := SSLRecord{
+			Domain: cleanseDomain(domain),
+		}
+
 		valid := true
-		notes := ""
-		conn, err := tls.Dial("tcp", domain+":443", nil)
+
+		conn, err := tls.Dial("tcp", ssl.Domain+":443", nil)
 		if err != nil {
-			notes += fmt.Sprintf("server does not support SSL certificate: %s", err.Error())
+			ssl.Notes += fmt.Sprintf("server does not support SSL certificate: %s\n", err.Error())
 			valid = false
 		}
 
-		err = conn.VerifyHostname(domain)
+		err = conn.VerifyHostname(ssl.Domain)
 		if err != nil {
-			notes += fmt.Sprintf("hostname does not match the SSL certificate: %s", err.Error())
+			ssl.Notes += fmt.Sprintf("hostname does not match the SSL certificate: %s\n", err.Error())
 			valid = false
 		}
-
-		expiry := conn.ConnectionState().PeerCertificates[0].NotAfter
+		ssl.Certificates = conn.ConnectionState().PeerCertificates
+		expiry := ssl.Certificates[0].NotAfter
 		if time.Now().After(expiry) {
-			notes += fmt.Sprintf("SSL certificate has expired: %v", expiry.Format(time.RFC850))
+			ssl.Notes += fmt.Sprintf("SSL certificate has expired: %v\n", expiry.Format(time.RFC850))
 			valid = false
 		}
 
-		log.Printf("%s%s%t%s%s%s%s%s%s\n", domain, separator, valid, separator, expiry.Format(time.RFC850), separator, conn.ConnectionState().PeerCertificates[0].Issuer, separator, notes)
+		if valid {
+			ssl.Valid = true
+		}
 
 		conn.Close()
+
+		records = append(records, ssl)
 	}
 
+	log.Printf("Domain%sValid%sExpiry%sSSL Issuer%sNotes", separator, separator, separator, separator)
+	for _, r := range records {
+		log.Printf("%s%s%t%s%s%s%s%s%s\n", r.Domain, separator, r.Valid, separator, r.Certificates[0].NotAfter.Format(time.RFC850), separator, r.Certificates[0].Issuer, separator, r.Notes)
+	}
+}
+
+func cleanseDomain(domain string) string {
+	domain = strings.Replace(domain, "https://", "", -1)
+	domain = strings.Replace(domain, "http://", "", -1)
+	domain = strings.Replace(domain, "www.", "", -1)
+	domain = strings.Replace(domain, "/", "", -1)
+	return domain
 }
