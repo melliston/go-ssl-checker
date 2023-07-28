@@ -20,7 +20,7 @@ type SSLRecord struct {
 func main() {
 	// TODO Handle better input eg command line, csv file, also config output too
 	separator := ","
-	domains := []string{"thegrandfathersteakhouse.uk"}
+	domains := []string{"http://aptestshop.co.uk"}
 	records := make([]SSLRecord, 0)
 
 	for _, domain := range domains {
@@ -30,8 +30,13 @@ func main() {
 
 	log.Printf("Domain%sValid%sExpiry%sSSL Issuer%sNotes", separator, separator, separator, separator)
 	for _, r := range records {
-		log.Printf("%s%s%t%s%s%s%s%s%s\n", r.Domain, separator, r.Valid, separator, r.Certificates[0].NotAfter.Format(time.RFC850), separator, r.Certificates[0].Issuer, separator, r.Notes)
+		issuer := ""
+		if len(r.Certificates) > 0 {
+			issuer = r.Certificates[0].Issuer.String()
+		}
+		log.Printf("%s%s%t%s%s%s%s%s%s\n", r.Domain, separator, r.Valid, separator, r.Expiry.Format(time.RFC850), separator, issuer, separator, r.Notes)
 	}
+
 }
 
 func Validate(domain string) SSLRecord {
@@ -45,12 +50,14 @@ func Validate(domain string) SSLRecord {
 	if err != nil {
 		ssl.Notes += fmt.Sprintf("server does not support SSL certificate: %s\n", err.Error())
 		valid = false
+		return ssl
 	}
 
 	err = conn.VerifyHostname(ssl.Domain)
 	if err != nil {
 		ssl.Notes += fmt.Sprintf("hostname does not match the SSL certificate: %s\n", err.Error())
 		valid = false
+		return ssl
 	}
 	ssl.Certificates = conn.ConnectionState().PeerCertificates
 	expiry := ssl.Certificates[0].NotAfter
