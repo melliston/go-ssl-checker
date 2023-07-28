@@ -44,33 +44,28 @@ func Validate(domain string) SSLRecord {
 		Domain: cleanseDomain(domain),
 	}
 
-	valid := true
-
 	conn, err := tls.Dial("tcp", ssl.Domain+":443", nil)
 	if err != nil {
 		ssl.Notes += fmt.Sprintf("server does not support SSL certificate: %s\n", err.Error())
-		valid = false
+		ssl.Valid = false
 		return ssl
 	}
+	defer conn.Close()
 
 	err = conn.VerifyHostname(ssl.Domain)
 	if err != nil {
 		ssl.Notes += fmt.Sprintf("hostname does not match the SSL certificate: %s\n", err.Error())
-		valid = false
+		ssl.Valid = false
 		return ssl
 	}
 	ssl.Certificates = conn.ConnectionState().PeerCertificates
 	expiry := ssl.Certificates[0].NotAfter
 	if time.Now().After(expiry) {
 		ssl.Notes += fmt.Sprintf("SSL certificate has expired: %v\n", expiry.Format(time.RFC850))
-		valid = false
+		ssl.Valid = false
 	}
 
-	if valid {
-		ssl.Valid = true
-	}
-
-	conn.Close()
+	ssl.Valid = true
 
 	return ssl
 }
