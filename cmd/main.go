@@ -18,41 +18,13 @@ type SSLRecord struct {
 }
 
 func main() {
+	// TODO Handle better input eg command line, csv file, also config output too
 	separator := ","
 	domains := []string{"thegrandfathersteakhouse.uk"}
 	records := make([]SSLRecord, 0)
 
 	for _, domain := range domains {
-		ssl := SSLRecord{
-			Domain: cleanseDomain(domain),
-		}
-
-		valid := true
-
-		conn, err := tls.Dial("tcp", ssl.Domain+":443", nil)
-		if err != nil {
-			ssl.Notes += fmt.Sprintf("server does not support SSL certificate: %s\n", err.Error())
-			valid = false
-		}
-
-		err = conn.VerifyHostname(ssl.Domain)
-		if err != nil {
-			ssl.Notes += fmt.Sprintf("hostname does not match the SSL certificate: %s\n", err.Error())
-			valid = false
-		}
-		ssl.Certificates = conn.ConnectionState().PeerCertificates
-		expiry := ssl.Certificates[0].NotAfter
-		if time.Now().After(expiry) {
-			ssl.Notes += fmt.Sprintf("SSL certificate has expired: %v\n", expiry.Format(time.RFC850))
-			valid = false
-		}
-
-		if valid {
-			ssl.Valid = true
-		}
-
-		conn.Close()
-
+		ssl := Validate(domain)
 		records = append(records, ssl)
 	}
 
@@ -60,6 +32,40 @@ func main() {
 	for _, r := range records {
 		log.Printf("%s%s%t%s%s%s%s%s%s\n", r.Domain, separator, r.Valid, separator, r.Certificates[0].NotAfter.Format(time.RFC850), separator, r.Certificates[0].Issuer, separator, r.Notes)
 	}
+}
+
+func Validate(domain string) SSLRecord {
+	ssl := SSLRecord{
+		Domain: cleanseDomain(domain),
+	}
+
+	valid := true
+
+	conn, err := tls.Dial("tcp", ssl.Domain+":443", nil)
+	if err != nil {
+		ssl.Notes += fmt.Sprintf("server does not support SSL certificate: %s\n", err.Error())
+		valid = false
+	}
+
+	err = conn.VerifyHostname(ssl.Domain)
+	if err != nil {
+		ssl.Notes += fmt.Sprintf("hostname does not match the SSL certificate: %s\n", err.Error())
+		valid = false
+	}
+	ssl.Certificates = conn.ConnectionState().PeerCertificates
+	expiry := ssl.Certificates[0].NotAfter
+	if time.Now().After(expiry) {
+		ssl.Notes += fmt.Sprintf("SSL certificate has expired: %v\n", expiry.Format(time.RFC850))
+		valid = false
+	}
+
+	if valid {
+		ssl.Valid = true
+	}
+
+	conn.Close()
+
+	return ssl
 }
 
 func cleanseDomain(domain string) string {
