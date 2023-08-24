@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 )
@@ -18,9 +19,16 @@ type SSLRecord struct {
 }
 
 func main() {
-	// TODO Handle better input eg command line, csv file, also config output too
+	// TODO Handle better input:
+	// command line (Done),
+	// csv file,
+	// also config output too
 	separator := ","
-	domains := []string{"http://aptestshop.co.uk"}
+	input := os.Args[1:]
+	if len(input) == 0 {
+		log.Fatalf("Please specify a domain(s) to check the SSL.\n eg. %s foo.com,bar.com ", os.Args[0])
+	}
+	domains := strings.Split(input[0], ",")
 	records := make([]SSLRecord, 0)
 
 	for _, domain := range domains {
