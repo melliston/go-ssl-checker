@@ -18,3 +18,4 @@ In no particular order some further enhancements
 
 - Order output by SSL expiry date.
 - Extend the SSL checking data to see what other domains are covered by the SSL.
+- Make file to produce builds for mac, linux and windows.
