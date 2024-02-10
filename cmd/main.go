@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	"crypto/x509"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -19,35 +21,77 @@ type SSLRecord struct {
 }
 
 func main() {
+	var domains []string
+
+	var domainsArg string
+	var filepathArg string
+	var outputArg string
+
+	records := make([]SSLRecord, 0)
+	separator := ","
+
 	// TODO Handle better input:
 	// command line (Done),
 	// csv file,
 	// also config output too
-	separator := ","
-	input := os.Args[1:]
-	if len(input) == 0 {
-		log.Fatalf("Please specify a domain(s) to check the SSL.\n eg. %s foo.com,bar.com ", os.Args[0])
+
+	// See if reading from a csv input or just command line
+	flag.StringVar(&domainsArg, "domains", "", "A single domain or a comma seperated list -domains=foo.co.uk or -domains=foo.co.uk,bar.co.uk")
+	flag.StringVar(&filepathArg, "file", "", "The file path to load in and parse. Contains one domain per line")
+	flag.StringVar(&outputArg, "output", "csv", "The output method. Either in column format or csv format. If only one domain is supplied then defaults to column. Options are 'csv' or 'column'")
+	flag.Parse()
+
+	if len(domainsArg) == 0 && len(filepathArg) == 0 {
+		flag.Usage()
+		return
 	}
-	domains := strings.Split(input[0], ",")
-	records := make([]SSLRecord, 0)
+
+	if len(domainsArg) > 0 {
+		domains = strings.Split(domainsArg, ",")
+	} else {
+		domains = readFile(filepathArg)
+	}
+
+	if len(domains) == 0 {
+		log.Fatalln("No domains were specified.")
+	}
+
+	// Check that if only one domain and not specified output then set it to column for output method
+	if len(domains) == 1 && outputArg != "csv" {
+		outputArg = "column"
+	}
 
 	for _, domain := range domains {
-		ssl := Validate(domain)
+		ssl := validate(domain)
 		records = append(records, ssl)
 	}
 
-	log.Printf("Domain%sValid%sExpiry%sSSL Issuer%sNotes", separator, separator, separator, separator)
+	if outputArg == "csv" {
+		fmt.Printf("Domain%sValid%sExpiry%sSSL Issuer%sNotes\n", separator, separator, separator, separator)
+	}
+
+	var format string
+	if outputArg == "csv" {
+		format = "%s%s%t%s%s%s%s%s%s\n"
+	}
+	if outputArg == "column" {
+		format = "\n\nDomain:\t\t%s%s\nValid:\t\t%t%s\nExpiry:\t\t%s%s\nSSL Issuer:\t%s%s\nNotes:\t\t%s\n"
+		separator = ""
+	}
 	for _, r := range records {
 		issuer := ""
+		var expiry time.Time
 		if len(r.Certificates) > 0 {
 			issuer = r.Certificates[0].Issuer.String()
+			expiry = r.Certificates[0].NotAfter
 		}
-		log.Printf("%s%s%t%s%s%s%s%s%s\n", r.Domain, separator, r.Valid, separator, r.Expiry.Format(time.RFC850), separator, issuer, separator, r.Notes)
+
+		fmt.Printf(format, r.Domain, separator, r.Valid, separator, expiry.Format(time.RFC1123), separator, issuer, separator, r.Notes)
 	}
 
 }
 
-func Validate(domain string) SSLRecord {
+func validate(domain string) SSLRecord {
 	ssl := SSLRecord{
 		Domain: cleanseDomain(domain),
 	}
@@ -78,7 +122,27 @@ func Validate(domain string) SSLRecord {
 	return ssl
 }
 
+func readFile(filePath string) []string {
+	readFile, err := os.Open(filePath)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+	fileScanner := bufio.NewScanner(readFile)
+	fileScanner.Split(bufio.ScanLines)
+	var domains []string
+
+	for fileScanner.Scan() {
+		domains = append(domains, fileScanner.Text())
+	}
+
+	readFile.Close()
+
+	return domains
+}
+
 func cleanseDomain(domain string) string {
+	domain = strings.TrimSpace(domain)
 	domain = strings.Replace(domain, "https://", "", -1)
 	domain = strings.Replace(domain, "http://", "", -1)
 	domain = strings.Replace(domain, "www.", "", -1)
