@@ -62,7 +62,7 @@ func main() {
 	}
 
 	for _, domain := range domains {
-		ssl := validate(domain)
+		ssl := Validate(domain)
 		records = append(records, ssl)
 	}
 
@@ -91,7 +91,7 @@ func main() {
 
 }
 
-func validate(domain string) SSLRecord {
+func Validate(domain string) SSLRecord {
 	ssl := SSLRecord{
 		Domain: cleanseDomain(domain),
 	}
