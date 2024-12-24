@@ -27,7 +27,6 @@ func main() {
 	var filepathArg string
 	var outputArg string
 
-	records := make([]SSLRecord, 0)
 	separator := ","
 
 	// TODO Handle better input:
@@ -61,39 +60,53 @@ func main() {
 		outputArg = "column"
 	}
 
-	for _, domain := range domains {
-		ssl := Validate(domain)
-		records = append(records, ssl)
-	}
-
 	if outputArg == "csv" {
 		fmt.Printf("Domain%sValid%sExpiry%sSSL Issuer%sNotes\n", separator, separator, separator, separator)
 	}
 
 	var format string
 	if outputArg == "csv" {
-		format = "%s%s%t%s%s%s%s%s%s\n"
+		format = "%s%s%t%s%s%s%s%s%s"
 	}
 	if outputArg == "column" {
-		format = "\n\nDomain:\t\t%s%s\nValid:\t\t%t%s\nExpiry:\t\t%s%s\nSSL Issuer:\t%s%s\nNotes:\t\t%s\n"
+		format = "\nDomain:\t\t%s%s\nValid:\t\t%t%s\nExpiry:\t\t%s%s\nSSL Issuer:\t%s%s\nNotes:\t\t%s"
 		separator = ""
 	}
-	for _, r := range records {
+
+	for _, domain := range domains {
+		if len(domain) == 0 {
+			continue
+		}
+		ssl := Validate(cleanseDomain(domain))
+		wwwSSL := Validate("www." + ssl.Domain)
+
 		issuer := ""
 		var expiry time.Time
-		if len(r.Certificates) > 0 {
-			issuer = r.Certificates[0].Issuer.String()
-			expiry = r.Certificates[0].NotAfter
+		if len(ssl.Certificates) > 0 {
+			issuer = ssl.Certificates[0].Issuer.String()
+			expiry = ssl.Certificates[0].NotAfter
 		}
 
-		fmt.Printf(format, r.Domain, separator, r.Valid, separator, expiry.Format(time.RFC1123), separator, issuer, separator, r.Notes)
-	}
+		if !ssl.Valid {
+			fmt.Printf(format, ssl.Domain, separator, ssl.Valid, separator, expiry.Format(time.RFC1123), separator, issuer, separator, ssl.Notes)
+		}
 
+		wwwIssuer := ""
+		var wwwExpiry time.Time
+		if len(ssl.Certificates) > 0 {
+			wwwIssuer = ssl.Certificates[0].Issuer.String()
+			wwwExpiry = ssl.Certificates[0].NotAfter
+		}
+
+		if !wwwSSL.Valid {
+			fmt.Printf(format, wwwSSL.Domain, separator, wwwSSL.Valid, separator, wwwExpiry.Format(time.RFC1123), separator, wwwIssuer, separator, wwwSSL.Notes)
+		}
+	}
 }
 
 func Validate(domain string) SSLRecord {
 	ssl := SSLRecord{
-		Domain: cleanseDomain(domain),
+		Domain: domain,
 	}
 
 	conn, err := tls.Dial("tcp", ssl.Domain+":443", nil)
