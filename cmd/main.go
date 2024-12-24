@@ -160,5 +160,8 @@ func cleanseDomain(domain string) string {
 	domain = strings.Replace(domain, "http://", "", -1)
 	domain = strings.Replace(domain, "www.", "", -1)
 	domain = strings.Replace(domain, "/", "", -1)
+	domain = strings.Replace(domain, "\"", "", -1)
+	domain = strings.Replace(domain, "'", "", -1)
+	domain = strings.Replace(domain, ",", "", -1)
 	return domain
 }
